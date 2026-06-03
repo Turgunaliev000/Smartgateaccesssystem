@@ -7,6 +7,7 @@ import { History } from "./components/History";
 import { Notifications } from "./components/Notifications";
 import { Profile } from "./components/Profile";
 import { Admin } from "./components/Admin";
+import { Scanner } from "./components/Scanner";
 
 export const router = createBrowserRouter([
   {
@@ -19,10 +20,11 @@ export const router = createBrowserRouter([
     children: [
       { index: true, Component: Dashboard },
       { path: "guest-qr", Component: GuestQR },
+      { path: "scanner", Component: Scanner },
       { path: "history", Component: History },
       { path: "notifications", Component: Notifications },
       { path: "profile", Component: Profile },
-      { path: "admin", Component: Admin },
+      { path: "admin-panel", Component: Admin },
     ],
   },
 ]);

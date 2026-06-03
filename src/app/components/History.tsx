@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Input } from "./ui/input";
@@ -14,34 +14,25 @@ import {
   CheckCircle2
 } from "lucide-react";
 import { motion } from "motion/react";
-
-interface HistoryEntry {
-  id: string;
-  type: "student" | "guest" | "staff";
-  name: string;
-  action: "open" | "qr";
-  time: string;
-  date: string;
-}
-
-const mockHistory: HistoryEntry[] = [
-  { id: "1", type: "student", name: "Эмир Токтосунов", action: "open", time: "14:32", date: "Сегодня" },
-  { id: "2", type: "guest", name: "Айбек Каримов", action: "qr", time: "13:10", date: "Сегодня" },
-  { id: "3", type: "staff", name: "Проф. Жамиля Исакова", action: "open", time: "12:05", date: "Сегодня" },
-  { id: "4", type: "student", name: "Нургуль Бекова", action: "open", time: "11:45", date: "Сегодня" },
-  { id: "5", type: "guest", name: "Данияр Омуров", action: "qr", time: "10:30", date: "Сегодня" },
-  { id: "6", type: "student", name: "Азамат Султанов", action: "open", time: "09:15", date: "Сегодня" },
-  { id: "7", type: "staff", name: "Д-р Алмаз Асанов", action: "open", time: "08:50", date: "Сегодня" },
-  { id: "8", type: "student", name: "Айсулуу Мамытова", action: "open", time: "08:30", date: "Сегодня" },
-  { id: "9", type: "guest", name: "Курманбек Жусупов", action: "qr", time: "17:45", date: "Вчера" },
-  { id: "10", type: "student", name: "Бекзат Токтогулов", action: "open", time: "16:20", date: "Вчера" },
-];
+import { api, HistoryEntry } from "../api";
+import { toast } from "sonner";
 
 export function History() {
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [stats, setStats] = useState({ today: 0, week: 0, month: 0 });
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterType, setFilterType] = useState<"all" | "student" | "guest" | "staff">("all");
+  const [filterType, setFilterType] = useState<"all" | "student" | "guest" | "staff" | "admin">("all");
 
-  const filteredHistory = mockHistory.filter((entry) => {
+  useEffect(() => {
+    api.accessLogs()
+      .then((data) => {
+        setHistory(data.logs);
+        setStats(data.stats);
+      })
+      .catch((err) => toast.error(err instanceof Error ? err.message : "Не удалось загрузить журнал"));
+  }, []);
+
+  const filteredHistory = history.filter((entry) => {
     const matchesSearch = entry.name.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesFilter = filterType === "all" || entry.type === filterType;
     return matchesSearch && matchesFilter;
@@ -54,6 +45,8 @@ export function History() {
       case "guest":
         return <User className="w-5 h-5" />;
       case "staff":
+        return <UserCheck className="w-5 h-5" />;
+      case "admin":
         return <UserCheck className="w-5 h-5" />;
       default:
         return <User className="w-5 h-5" />;
@@ -68,6 +61,8 @@ export function History() {
         return "Гость";
       case "staff":
         return "Преподаватель";
+      case "admin":
+        return "Администратор";
       default:
         return type;
     }
@@ -81,6 +76,8 @@ export function History() {
         return "bg-purple-100 text-purple-900 border-purple-200";
       case "staff":
         return "bg-green-100 text-green-900 border-green-200";
+      case "admin":
+        return "bg-orange-100 text-orange-900 border-orange-200";
       default:
         return "bg-gray-100 text-gray-900 border-gray-200";
     }
@@ -161,17 +158,17 @@ export function History() {
       {/* Статистика */}
       <div className="grid grid-cols-3 gap-2">
         <Card className="p-3 text-center bg-blue-50 border-blue-200">
-          <div className="text-xl font-bold text-blue-900">24</div>
+          <div className="text-xl font-bold text-blue-900">{stats.today}</div>
           <div className="text-xs text-gray-600">Сегодня</div>
         </Card>
         
         <Card className="p-3 text-center bg-green-50 border-green-200">
-          <div className="text-xl font-bold text-green-900">186</div>
+          <div className="text-xl font-bold text-green-900">{stats.week}</div>
           <div className="text-xs text-gray-600">Эта неделя</div>
         </Card>
         
         <Card className="p-3 text-center bg-purple-50 border-purple-200">
-          <div className="text-xl font-bold text-purple-900">724</div>
+          <div className="text-xl font-bold text-purple-900">{stats.month}</div>
           <div className="text-xs text-gray-600">Этот месяц</div>
         </Card>
       </div>

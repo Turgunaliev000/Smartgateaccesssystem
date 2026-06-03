@@ -1,11 +1,57 @@
 
-  # Smart Gate Access System
+# Smart Gate Access System
 
-  This is a code bundle for Smart Gate Access System. The original project is available at https://www.figma.com/design/3xqIF3AGcJgXlgPjtxLzGz/Smart-Gate-Access-System.
+Рабочий проект системы цифрового доступа для КПП университета: Django backend + React/Vite frontend.
 
-  ## Running the code
+## Возможности
 
-  Run `npm i` to install the dependencies.
+- Вход пользователя по email.
+- Открытие шлагбаума с записью события в журнал.
+- Генерация гостевых QR-пропусков.
+- Проверка гостевых QR-пропусков на КПП через страницу сканера.
+- Сканирование QR через камеру браузера с ручным вводом как запасным вариантом.
+- История въездов и действий.
+- Уведомления с отметкой прочтения и удалением.
+- Админ-панель для добавления и блокировки пользователей.
+- SQLite база данных и Django admin.
 
-  Run `npm run dev` to start the development server.
-  
+## Запуск полного проекта через Django
+
+```bash
+python3 manage.py migrate
+python3 manage.py seed_demo
+npm run build
+python3 manage.py runserver
+```
+
+Проект будет доступен на `http://127.0.0.1:8000`.
+
+Django отдаёт интерфейс, API и SQLite базу с одного сервера:
+
+- приложение: `http://127.0.0.1:8000`
+- сканер QR: `http://127.0.0.1:8000/scanner`
+- API: `http://127.0.0.1:8000/api/`
+- Django admin: `http://127.0.0.1:8000/admin/`
+
+## Запуск frontend отдельно для разработки
+
+В отдельном терминале:
+
+```bash
+npm install
+npm run dev
+```
+
+Frontend будет доступен на `http://localhost:5173`.
+
+## Демо-вход
+
+Email: `emir.turgunaliev@salymbekov.edu`
+
+Пароль: `admin12345`
+
+Для демо-пользователей без прав администратора пароль: `user12345`.
+
+## Сканер камеры
+
+На странице `/scanner` можно нажать `Сканировать камерой`. Браузер должен разрешить доступ к камере и поддерживать распознавание QR через `BarcodeDetector`. Если камера недоступна, код пропуска можно вставить вручную.

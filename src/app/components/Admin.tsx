@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -21,29 +21,20 @@ import {
 } from "lucide-react";
 import { motion } from "motion/react";
 import { toast } from "sonner";
-
-interface User {
-  id: string;
-  name: string;
-  type: "student" | "staff";
-  status: "active" | "blocked";
-  accessCount: number;
-}
-
-const mockUsers: User[] = [
-  { id: "1", name: "Эмир Токтосунов", type: "student", status: "active", accessCount: 42 },
-  { id: "2", name: "Проф. Жамиля Исакова", type: "staff", status: "active", accessCount: 67 },
-  { id: "3", name: "Нургуль Бекова", type: "student", status: "active", accessCount: 38 },
-  { id: "4", name: "Д-р Алмаз Асанов", type: "staff", status: "active", accessCount: 54 },
-  { id: "5", name: "Азамат Султанов", type: "student", status: "blocked", accessCount: 12 },
-];
+import { api, AccessUser } from "../api";
 
 export function Admin() {
-  const [users, setUsers] = useState<User[]>(mockUsers);
+  const [users, setUsers] = useState<AccessUser[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
   const [newUserName, setNewUserName] = useState("");
-  const [newUserType, setNewUserType] = useState<"student" | "staff">("student");
+  const [newUserType, setNewUserType] = useState<"student" | "staff" | "security">("student");
+
+  useEffect(() => {
+    api.users()
+      .then((data) => setUsers(data.users))
+      .catch((err) => toast.error(err instanceof Error ? err.message : "Не удалось загрузить пользователей"));
+  }, []);
 
   const filteredUsers = users.filter(user =>
     user.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -53,37 +44,34 @@ export function Admin() {
   const blockedUsers = users.filter(u => u.status === "blocked").length;
   const totalAccess = users.reduce((sum, u) => sum + u.accessCount, 0);
 
-  const handleToggleStatus = (userId: string) => {
-    setUsers(prev =>
-      prev.map(user =>
-        user.id === userId
-          ? { ...user, status: user.status === "active" ? "blocked" : "active" }
-          : user
-      )
-    );
+  const handleToggleStatus = async (userId: number) => {
     const user = users.find(u => u.id === userId);
-    if (user) {
-      toast.success(
-        user.status === "active"
-          ? `${user.name} заблокирован`
-          : `${user.name} разблокирован`
-      );
+    try {
+      const data = await api.toggleUser(userId);
+      setUsers(prev => prev.map(item => item.id === userId ? data.user : item));
+      if (user) {
+        toast.success(
+          user.status === "active"
+            ? `${user.name} заблокирован`
+            : `${user.name} разблокирован`
+        );
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Не удалось изменить статус");
     }
   };
 
-  const handleAddUser = (e: React.FormEvent) => {
+  const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newUser: User = {
-      id: `${Date.now()}`,
-      name: newUserName,
-      type: newUserType,
-      status: "active",
-      accessCount: 0,
-    };
-    setUsers(prev => [...prev, newUser]);
-    toast.success(`${newUserName} добавлен в систему`);
-    setNewUserName("");
-    setShowAddForm(false);
+    try {
+      const data = await api.createUser(newUserName, newUserType);
+      setUsers(prev => [...prev, data.user]);
+      toast.success(`${newUserName} добавлен в систему`);
+      setNewUserName("");
+      setShowAddForm(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Не удалось добавить пользователя");
+    }
   };
 
   return (
@@ -195,11 +183,12 @@ export function Admin() {
                 <select
                   id="userType"
                   value={newUserType}
-                  onChange={(e) => setNewUserType(e.target.value as "student" | "staff")}
+                  onChange={(e) => setNewUserType(e.target.value as "student" | "staff" | "security")}
                   className="w-full mt-1.5 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="student">Студент</option>
                   <option value="staff">Преподаватель</option>
+                  <option value="security">Охрана</option>
                 </select>
               </div>
 
@@ -255,7 +244,7 @@ export function Admin() {
                   
                   <div className="flex items-center gap-3 text-sm text-gray-600">
                     <Badge variant="outline" className="text-xs">
-                      {user.type === "student" ? "Студент" : "Преподаватель"}
+                      {user.type === "student" ? "Студент" : user.type === "staff" ? "Преподаватель" : user.type === "security" ? "Охрана" : "Администратор"}
                     </Badge>
                     <span className="text-xs">
                       {user.accessCount} {user.accessCount === 1 ? "въезд" : "въездов"}

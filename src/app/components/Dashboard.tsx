@@ -1,16 +1,34 @@
 import { useState, useEffect } from "react";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
-import { DoorOpen, MapPin, CheckCircle2, Clock, AlertCircle, Settings } from "lucide-react";
+import { DoorOpen, MapPin, CheckCircle2, Clock, AlertCircle, Settings, FileScan } from "lucide-react";
 import { motion } from "motion/react";
 import { useNavigate } from "react-router";
+import { api, AccessUser, GateState } from "../api";
+import { toast } from "sonner";
 
 export function Dashboard() {
   const navigate = useNavigate();
+  const [gate, setGate] = useState<GateState | null>(null);
+  const [user, setUser] = useState<AccessUser | null>(null);
+  const [stats, setStats] = useState({ security: 98, timeSaved: 40, control: 100 });
   const [gateOpen, setGateOpen] = useState(false);
   const [lastOpenTime, setLastOpenTime] = useState<Date | null>(null);
   const [timeAgo, setTimeAgo] = useState("");
-  const [isAdmin, setIsAdmin] = useState(true); // Демо: пользователь - админ
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.dashboard()
+      .then((data) => {
+        setGate(data.gate);
+        setUser(data.user);
+        setStats(data.stats);
+        setGateOpen(data.gate.isOpen);
+        setLastOpenTime(data.gate.lastOpenedAt ? new Date(data.gate.lastOpenedAt) : null);
+      })
+      .catch((err) => toast.error(err instanceof Error ? err.message : "Не удалось загрузить данные"))
+      .finally(() => setLoading(false));
+  }, []);
 
   useEffect(() => {
     if (lastOpenTime) {
@@ -30,15 +48,27 @@ export function Dashboard() {
     }
   }, [lastOpenTime]);
 
-  const handleToggleGate = () => {
-    setGateOpen(true);
-    setLastOpenTime(new Date());
-    
-    // Автоматически закрыть через 5 секунд
+  const handleToggleGate = async () => {
+    try {
+      const data = await api.openGate();
+      setGate(data.gate);
+      setUser(data.user);
+      setGateOpen(true);
+      setLastOpenTime(data.gate.lastOpenedAt ? new Date(data.gate.lastOpenedAt) : new Date());
+      toast.success("Шлагбаум открыт");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Не удалось открыть шлагбаум");
+      return;
+    }
+
     setTimeout(() => {
       setGateOpen(false);
     }, 5000);
   };
+
+  if (loading) {
+    return <div className="max-w-md mx-auto p-4 text-sm text-gray-600">Загрузка системы доступа...</div>;
+  }
 
   return (
     <div className="max-w-md mx-auto p-4 space-y-4">
@@ -49,8 +79,8 @@ export function Dashboard() {
             <MapPin className="w-5 h-5 text-blue-900" />
           </div>
           <div className="flex-1">
-            <h3 className="font-semibold text-gray-900">Главный въезд</h3>
-            <p className="text-sm text-gray-600">Салымбеков Университет</p>
+            <h3 className="font-semibold text-gray-900">{gate?.name ?? "Главный въезд"}</h3>
+            <p className="text-sm text-gray-600">{gate?.location ?? "Салымбеков Университет"}</p>
           </div>
         </div>
       </Card>
@@ -115,7 +145,7 @@ export function Dashboard() {
       </motion.div>
 
       {/* Быстрые действия */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-3 gap-3">
         <Card
           className="p-4 hover:shadow-md transition-shadow cursor-pointer border-blue-200"
           onClick={() => navigate("/guest-qr")}
@@ -129,6 +159,20 @@ export function Dashboard() {
               </motion.div>
             </div>
             <p className="text-sm font-medium text-gray-900">Гостевой QR</p>
+          </div>
+        </Card>
+
+        <Card
+          className="p-4 hover:shadow-md transition-shadow cursor-pointer border-blue-200"
+          onClick={() => navigate("/scanner")}
+        >
+          <div className="text-center space-y-2">
+            <div className="bg-blue-100 w-12 h-12 rounded-full flex items-center justify-center mx-auto">
+              <motion.div whileHover={{ scale: 1.1 }}>
+                <FileScan className="w-6 h-6 text-blue-900" />
+              </motion.div>
+            </div>
+            <p className="text-sm font-medium text-gray-900">Сканер</p>
           </div>
         </Card>
 
@@ -148,10 +192,10 @@ export function Dashboard() {
       </div>
 
       {/* Админ кнопка */}
-      {isAdmin && (
+      {user?.isAdmin && (
         <Card
           className="p-4 bg-gradient-to-r from-blue-900 to-blue-800 text-white hover:shadow-lg transition-shadow cursor-pointer"
-          onClick={() => navigate("/admin")}
+          onClick={() => navigate("/admin-panel")}
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -169,17 +213,17 @@ export function Dashboard() {
       {/* Информационные карточки */}
       <div className="grid grid-cols-3 gap-2 pt-2">
         <Card className="p-3 text-center bg-green-50 border-green-200">
-          <div className="text-2xl font-bold text-green-700">98%</div>
+          <div className="text-2xl font-bold text-green-700">{stats.security}%</div>
           <div className="text-xs text-gray-600">Безопасность</div>
         </Card>
         
         <Card className="p-3 text-center bg-blue-50 border-blue-200">
-          <div className="text-2xl font-bold text-blue-700">-40%</div>
+          <div className="text-2xl font-bold text-blue-700">-{stats.timeSaved}%</div>
           <div className="text-xs text-gray-600">Время въезда</div>
         </Card>
         
         <Card className="p-3 text-center bg-purple-50 border-purple-200">
-          <div className="text-2xl font-bold text-purple-700">100%</div>
+          <div className="text-2xl font-bold text-purple-700">{stats.control}%</div>
           <div className="text-xs text-gray-600">Контроль</div>
         </Card>
       </div>

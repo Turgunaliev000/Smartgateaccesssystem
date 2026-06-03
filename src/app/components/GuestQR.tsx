@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { Input } from "./ui/input";
@@ -7,37 +7,39 @@ import { QRCodeSVG } from "qrcode.react";
 import { Calendar, Clock, User, FileText, MapPin, Download, Share2 } from "lucide-react";
 import { motion } from "motion/react";
 import { toast } from "sonner";
-
-interface GuestPass {
-  name: string;
-  reason: string;
-  validUntil: string;
-  id: string;
-}
+import { api, GuestPass } from "../api";
 
 export function GuestQR() {
   const [guestName, setGuestName] = useState("");
   const [reason, setReason] = useState("");
   const [validUntil, setValidUntil] = useState("");
   const [generatedPass, setGeneratedPass] = useState<GuestPass | null>(null);
+  const [stats, setStats] = useState({ today: 0, week: 0, month: 0 });
+  const [loading, setLoading] = useState(false);
 
-  const handleGenerateQR = (e: React.FormEvent) => {
+  useEffect(() => {
+    api.guestPasses()
+      .then((data) => setStats(data.stats))
+      .catch(() => undefined);
+  }, []);
+
+  const handleGenerateQR = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    const pass: GuestPass = {
-      name: guestName,
-      reason: reason,
-      validUntil: validUntil,
-      id: `GUEST-${Date.now()}`,
-    };
-
-    setGeneratedPass(pass);
-    toast.success("QR-код успешно сгенерирован!");
-    
-    // Очистить форму
-    setGuestName("");
-    setReason("");
-    setValidUntil("");
+    setLoading(true);
+    try {
+      const data = await api.createGuestPass(guestName, reason, validUntil);
+      const nextStats = await api.guestPasses();
+      setGeneratedPass(data.pass);
+      setStats(nextStats.stats);
+      toast.success("QR-код успешно сгенерирован!");
+      setGuestName("");
+      setReason("");
+      setValidUntil("");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Не удалось создать QR-код");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleShare = () => {
@@ -128,10 +130,11 @@ export function GuestQR() {
 
               <Button
                 type="submit"
+                disabled={loading}
                 className="w-full py-6 bg-blue-900 hover:bg-blue-800"
                 size="lg"
               >
-                Сгенерировать QR-код
+                {loading ? "Создание..." : "Сгенерировать QR-код"}
               </Button>
             </form>
           </Card>
@@ -161,7 +164,7 @@ export function GuestQR() {
           <Card className="p-6 bg-white text-center">
             <div className="inline-block p-4 bg-white rounded-xl shadow-inner border-2 border-gray-200">
               <QRCodeSVG
-                value={JSON.stringify(generatedPass)}
+                value={JSON.stringify({ type: "smart-gate-guest-pass", code: generatedPass.code })}
                 size={200}
                 level="H"
                 includeMargin={true}
@@ -221,7 +224,7 @@ export function GuestQR() {
 
             <div className="mt-4 pt-4 border-t border-gray-200">
               <p className="text-xs text-gray-600 text-center">
-                ID: {generatedPass.id}
+                ID: {generatedPass.code}
               </p>
             </div>
           </Card>
@@ -261,17 +264,17 @@ export function GuestQR() {
       {/* Статистика */}
       <div className="grid grid-cols-3 gap-2">
         <Card className="p-3 text-center bg-blue-50 border-blue-200">
-          <div className="text-xl font-bold text-blue-900">12</div>
+          <div className="text-xl font-bold text-blue-900">{stats.today}</div>
           <div className="text-xs text-gray-600">Сегодня</div>
         </Card>
         
         <Card className="p-3 text-center bg-green-50 border-green-200">
-          <div className="text-xl font-bold text-green-900">47</div>
+          <div className="text-xl font-bold text-green-900">{stats.week}</div>
           <div className="text-xs text-gray-600">Эта неделя</div>
         </Card>
         
         <Card className="p-3 text-center bg-purple-50 border-purple-200">
-          <div className="text-xl font-bold text-purple-900">156</div>
+          <div className="text-xl font-bold text-purple-900">{stats.month}</div>
           <div className="text-xs text-gray-600">Этот месяц</div>
         </Card>
       </div>

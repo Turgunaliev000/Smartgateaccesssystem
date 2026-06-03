@@ -4,16 +4,29 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Shield } from "lucide-react";
+import { api } from "../api";
+import { toast } from "sonner";
 
 export function Login() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Простая авторизация для демо
-    navigate("/");
+    setLoading(true);
+    setError("");
+    try {
+      await api.login(email, password);
+      toast.success("Вход выполнен");
+      navigate("/");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Не удалось войти");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -29,7 +42,7 @@ export function Login() {
             <p className="text-sm text-gray-600 text-center">
               Салымбеков Университет
             </p>
-            <p className="text-xs text-gray-500 mt-1">Си��тема цифрового доступа</p>
+            <p className="text-xs text-gray-500 mt-1">Система цифрового доступа</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-5">
@@ -61,10 +74,15 @@ export function Login() {
 
             <Button
               type="submit"
+              disabled={loading}
               className="w-full bg-blue-900 hover:bg-blue-800 text-white py-6"
             >
-              Войти в систему
+              {loading ? "Вход..." : "Войти в систему"}
             </Button>
+
+            {error && (
+              <p className="text-sm text-red-600 text-center">{error}</p>
+            )}
           </form>
 
           <div className="mt-6 text-center">

@@ -18,11 +18,21 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
+import { useEffect, useState } from "react";
+import { api, AccessUser } from "../api";
 
 export function Profile() {
   const navigate = useNavigate();
+  const [user, setUser] = useState<AccessUser | null>(null);
 
-  const handleLogout = () => {
+  useEffect(() => {
+    api.me()
+      .then((data) => setUser(data.user))
+      .catch(() => navigate("/login"));
+  }, [navigate]);
+
+  const handleLogout = async () => {
+    await api.logout();
     toast.success("Вы вышли из системы");
     navigate("/login");
   };
@@ -41,13 +51,13 @@ export function Profile() {
           </div>
           
           <div className="flex-1">
-            <h2 className="text-xl font-bold mb-1">Эмир Токтосунов</h2>
+            <h2 className="text-xl font-bold mb-1">{user?.name ?? "Пользователь"}</h2>
             <Badge className="bg-green-500 hover:bg-green-600 text-white border-0 mb-2">
-              Администратор
+              {user?.isAdmin ? "Администратор" : user?.type === "staff" ? "Преподаватель" : user?.type === "security" ? "Охрана" : "Студент"}
             </Badge>
             <div className="flex items-center gap-2 text-sm text-blue-100">
               <IdCard className="w-4 h-4" />
-              <span>ID: STU-2024-1234</span>
+              <span>ID: {user?.identifier ?? "..."}</span>
             </div>
           </div>
         </div>
@@ -65,7 +75,7 @@ export function Profile() {
             <Mail className="w-5 h-5 text-gray-600" />
             <div>
               <p className="text-xs text-gray-500">Email</p>
-              <p className="text-sm font-medium text-gray-900">emir.toktosunov@salymbekov.edu</p>
+              <p className="text-sm font-medium text-gray-900">{user?.email ?? "..."}</p>
             </div>
           </div>
 
@@ -73,7 +83,7 @@ export function Profile() {
             <Phone className="w-5 h-5 text-gray-600" />
             <div>
               <p className="text-xs text-gray-500">Телефон</p>
-              <p className="text-sm font-medium text-gray-900">+996 555 123 456</p>
+              <p className="text-sm font-medium text-gray-900">{user?.phone || "Не указан"}</p>
             </div>
           </div>
 
@@ -81,7 +91,7 @@ export function Profile() {
             <GraduationCap className="w-5 h-5 text-gray-600" />
             <div>
               <p className="text-xs text-gray-500">Факультет</p>
-              <p className="text-sm font-medium text-gray-900">Информационные технологии</p>
+              <p className="text-sm font-medium text-gray-900">{user?.department || "Салымбеков Университет"}</p>
             </div>
           </div>
 
@@ -89,7 +99,9 @@ export function Profile() {
             <Shield className="w-5 h-5 text-gray-600" />
             <div>
               <p className="text-xs text-gray-500">Статус доступа</p>
-              <p className="text-sm font-medium text-green-700">Активен</p>
+              <p className={`text-sm font-medium ${user?.status === "blocked" ? "text-red-700" : "text-green-700"}`}>
+                {user?.status === "blocked" ? "Заблокирован" : "Активен"}
+              </p>
             </div>
           </div>
         </div>
@@ -98,7 +110,7 @@ export function Profile() {
       {/* Статистика */}
       <div className="grid grid-cols-3 gap-2">
         <Card className="p-3 text-center bg-blue-50 border-blue-200">
-          <div className="text-xl font-bold text-blue-900">42</div>
+          <div className="text-xl font-bold text-blue-900">{user?.accessCount ?? 0}</div>
           <div className="text-xs text-gray-600">Въездов</div>
           <div className="text-xs text-gray-500 mt-0.5">этот месяц</div>
         </Card>

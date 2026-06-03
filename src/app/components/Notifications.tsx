@@ -11,71 +11,18 @@ import {
   Trash2
 } from "lucide-react";
 import { motion } from "motion/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
-
-interface Notification {
-  id: string;
-  type: "gate" | "guest" | "qr" | "alert";
-  title: string;
-  message: string;
-  time: string;
-  read: boolean;
-}
-
-const mockNotifications: Notification[] = [
-  {
-    id: "1",
-    type: "guest",
-    title: "Ваш гость прибыл на КПП",
-    message: "Айбек Каримов ожидает у главного въезда",
-    time: "5 минут назад",
-    read: false,
-  },
-  {
-    id: "2",
-    type: "gate",
-    title: "Шлагбаум открыт",
-    message: "Доступ разрешён через главный въезд",
-    time: "12 минут назад",
-    read: false,
-  },
-  {
-    id: "3",
-    type: "qr",
-    title: "QR-код использован",
-    message: "Гостевой пропуск для Данияра Омурова активирован",
-    time: "1 час назад",
-    read: false,
-  },
-  {
-    id: "4",
-    type: "gate",
-    title: "Шлагбаум закрыт",
-    message: "Автоматическое закрытие через 5 секунд",
-    time: "2 часа назад",
-    read: true,
-  },
-  {
-    id: "5",
-    type: "alert",
-    title: "Плановое обслуживание",
-    message: "Система будет недоступна завтра с 02:00 до 04:00",
-    time: "3 часа назад",
-    read: true,
-  },
-  {
-    id: "6",
-    type: "qr",
-    title: "QR-код истёк",
-    message: "Пропуск для Курманбека Жусупова больше не действителен",
-    time: "Вчера",
-    read: true,
-  },
-];
+import { api, NotificationItem } from "../api";
 
 export function Notifications() {
-  const [notifications, setNotifications] = useState(mockNotifications);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+
+  useEffect(() => {
+    api.notifications()
+      .then((data) => setNotifications(data.notifications))
+      .catch((err) => toast.error(err instanceof Error ? err.message : "Не удалось загрузить уведомления"));
+  }, []);
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
@@ -109,7 +56,8 @@ export function Notifications() {
     }
   };
 
-  const handleMarkAsRead = (id: string) => {
+  const handleMarkAsRead = async (id: number) => {
+    await api.markNotificationRead(id);
     setNotifications(prev =>
       prev.map(notif =>
         notif.id === id ? { ...notif, read: true } : notif
@@ -118,12 +66,14 @@ export function Notifications() {
     toast.success("Отмечено как прочитанное");
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: number) => {
+    await api.deleteNotification(id);
     setNotifications(prev => prev.filter(notif => notif.id !== id));
     toast.success("Уведомление удалено");
   };
 
-  const handleMarkAllAsRead = () => {
+  const handleMarkAllAsRead = async () => {
+    await api.markAllNotificationsRead();
     setNotifications(prev => prev.map(notif => ({ ...notif, read: true })));
     toast.success("Все уведомления отмечены как прочитанные");
   };

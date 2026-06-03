@@ -1,13 +1,23 @@
 import { Outlet, NavLink } from "react-router";
 import { Home, QrCode, History, Bell, User, Shield } from "lucide-react";
 import { Badge } from "./ui/badge";
+import { useEffect, useState } from "react";
+import { api } from "../api";
 
 export function Layout() {
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    api.notifications()
+      .then((data) => setUnreadCount(data.notifications.filter((item) => !item.read).length))
+      .catch(() => undefined);
+  }, []);
+
   const navItems = [
     { path: "/", icon: Home, label: "Главная" },
     { path: "/guest-qr", icon: QrCode, label: "QR" },
     { path: "/history", icon: History, label: "Журнал" },
-    { path: "/notifications", icon: Bell, label: "Уведомления", badge: 3 },
+    { path: "/notifications", icon: Bell, label: "Уведомления", badge: unreadCount },
     { path: "/profile", icon: User, label: "Профиль" },
   ];
 
@@ -49,7 +59,7 @@ export function Layout() {
                 <>
                   <item.icon className="w-5 h-5 mb-1" />
                   <span className="text-xs">{item.label}</span>
-                  {item.badge && (
+                  {item.badge > 0 && (
                     <Badge
                       variant="destructive"
                       className="absolute top-1 right-2 px-1.5 py-0 text-xs min-w-[18px] h-[18px] flex items-center justify-center"
