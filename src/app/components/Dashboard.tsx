@@ -70,6 +70,10 @@ export function Dashboard() {
     return <div className="max-w-md mx-auto p-4 text-sm text-gray-600">Загрузка системы доступа...</div>;
   }
 
+  const role = user?.isAdmin ? "admin" : user?.type;
+  const canCreateGuests = role === "admin" || role === "staff";
+  const canScan = role === "admin" || role === "security";
+
   return (
     <div className="max-w-md mx-auto p-4 space-y-4">
       {/* Локация */}
@@ -146,35 +150,39 @@ export function Dashboard() {
 
       {/* Быстрые действия */}
       <div className="grid grid-cols-3 gap-3">
-        <Card
-          className="p-4 hover:shadow-md transition-shadow cursor-pointer border-blue-200"
-          onClick={() => navigate("/guest-qr")}
-        >
-          <div className="text-center space-y-2">
-            <div className="bg-blue-100 w-12 h-12 rounded-full flex items-center justify-center mx-auto">
-              <motion.div whileHover={{ scale: 1.1 }}>
-                <svg className="w-6 h-6 text-blue-900" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M3 3h8v8H3V3zm2 2v4h4V5H5zm8-2h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm11-2h3v3h-3v-3zm0 5h3v3h-3v-3zm5-5h3v3h-3v-3zm0 5h3v3h-3v-3z"/>
-                </svg>
-              </motion.div>
+        {canCreateGuests && (
+          <Card
+            className="p-4 hover:shadow-md transition-shadow cursor-pointer border-blue-200"
+            onClick={() => navigate("/guest-qr")}
+          >
+            <div className="text-center space-y-2">
+              <div className="bg-blue-100 w-12 h-12 rounded-full flex items-center justify-center mx-auto">
+                <motion.div whileHover={{ scale: 1.1 }}>
+                  <svg className="w-6 h-6 text-blue-900" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M3 3h8v8H3V3zm2 2v4h4V5H5zm8-2h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm11-2h3v3h-3v-3zm0 5h3v3h-3v-3zm5-5h3v3h-3v-3zm0 5h3v3h-3v-3z"/>
+                  </svg>
+                </motion.div>
+              </div>
+              <p className="text-sm font-medium text-gray-900">Гостевой QR</p>
             </div>
-            <p className="text-sm font-medium text-gray-900">Гостевой QR</p>
-          </div>
-        </Card>
+          </Card>
+        )}
 
-        <Card
-          className="p-4 hover:shadow-md transition-shadow cursor-pointer border-blue-200"
-          onClick={() => navigate("/scanner")}
-        >
-          <div className="text-center space-y-2">
-            <div className="bg-blue-100 w-12 h-12 rounded-full flex items-center justify-center mx-auto">
-              <motion.div whileHover={{ scale: 1.1 }}>
-                <FileScan className="w-6 h-6 text-blue-900" />
-              </motion.div>
+        {canScan && (
+          <Card
+            className="p-4 hover:shadow-md transition-shadow cursor-pointer border-blue-200"
+            onClick={() => navigate("/scanner")}
+          >
+            <div className="text-center space-y-2">
+              <div className="bg-blue-100 w-12 h-12 rounded-full flex items-center justify-center mx-auto">
+                <motion.div whileHover={{ scale: 1.1 }}>
+                  <FileScan className="w-6 h-6 text-blue-900" />
+                </motion.div>
+              </div>
+              <p className="text-sm font-medium text-gray-900">Сканер</p>
             </div>
-            <p className="text-sm font-medium text-gray-900">Сканер</p>
-          </div>
-        </Card>
+          </Card>
+        )}
 
         <Card
           className="p-4 hover:shadow-md transition-shadow cursor-pointer border-blue-200"

@@ -4,15 +4,19 @@ import { Card } from "./ui/card";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { QRCodeSVG } from "qrcode.react";
-import { Calendar, Clock, User, FileText, MapPin, Download, Share2 } from "lucide-react";
+import { Calendar, Clock, User, FileText, MapPin, Download, Share2, Car, Phone, Repeat2, TicketCheck } from "lucide-react";
 import { motion } from "motion/react";
 import { toast } from "sonner";
 import { api, GuestPass } from "../api";
 
 export function GuestQR() {
   const [guestName, setGuestName] = useState("");
+  const [guestPhone, setGuestPhone] = useState("");
+  const [vehiclePlate, setVehiclePlate] = useState("");
+  const [comment, setComment] = useState("");
   const [reason, setReason] = useState("");
   const [validUntil, setValidUntil] = useState("");
+  const [passType, setPassType] = useState<"one_time" | "multiple">("one_time");
   const [generatedPass, setGeneratedPass] = useState<GuestPass | null>(null);
   const [stats, setStats] = useState({ today: 0, week: 0, month: 0 });
   const [loading, setLoading] = useState(false);
@@ -27,14 +31,26 @@ export function GuestQR() {
     e.preventDefault();
     setLoading(true);
     try {
-      const data = await api.createGuestPass(guestName, reason, validUntil);
+      const data = await api.createGuestPass({
+        name: guestName,
+        phone: guestPhone,
+        vehiclePlate,
+        comment,
+        reason,
+        validUntil,
+        passType,
+      });
       const nextStats = await api.guestPasses();
       setGeneratedPass(data.pass);
       setStats(nextStats.stats);
       toast.success("QR-код успешно сгенерирован!");
       setGuestName("");
+      setGuestPhone("");
+      setVehiclePlate("");
+      setComment("");
       setReason("");
       setValidUntil("");
+      setPassType("one_time");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Не удалось создать QR-код");
     } finally {
@@ -88,6 +104,38 @@ export function GuestQR() {
                 />
               </div>
 
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="guestPhone" className="flex items-center gap-2 mb-2">
+                    <Phone className="w-4 h-4" />
+                    Телефон
+                  </Label>
+                  <Input
+                    id="guestPhone"
+                    type="tel"
+                    placeholder="+996 555 123 456"
+                    value={guestPhone}
+                    onChange={(e) => setGuestPhone(e.target.value)}
+                    className="border-gray-300"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="vehiclePlate" className="flex items-center gap-2 mb-2">
+                    <Car className="w-4 h-4" />
+                    Номер авто
+                  </Label>
+                  <Input
+                    id="vehiclePlate"
+                    type="text"
+                    placeholder="01KG123ABC"
+                    value={vehiclePlate}
+                    onChange={(e) => setVehiclePlate(e.target.value.toUpperCase())}
+                    className="border-gray-300"
+                  />
+                </div>
+              </div>
+
               <div>
                 <Label htmlFor="reason" className="flex items-center gap-2 mb-2">
                   <FileText className="w-4 h-4" />
@@ -108,6 +156,54 @@ export function GuestQR() {
                   <option value="maintenance">Техническое обслуживание</option>
                   <option value="other">Другое</option>
                 </select>
+              </div>
+
+              <div>
+                <Label htmlFor="comment" className="flex items-center gap-2 mb-2">
+                  <FileText className="w-4 h-4" />
+                  Комментарий для охраны
+                </Label>
+                <Input
+                  id="comment"
+                  type="text"
+                  placeholder="Например: встречает деканат"
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                  className="border-gray-300"
+                />
+              </div>
+
+              <div>
+                <Label className="flex items-center gap-2 mb-2">
+                  <TicketCheck className="w-4 h-4" />
+                  Тип QR-пропуска
+                </Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPassType("one_time")}
+                    className={`min-h-16 p-3 border rounded-md text-left transition-colors ${
+                      passType === "one_time"
+                        ? "border-blue-900 bg-blue-50 text-blue-950"
+                        : "border-gray-300 bg-white text-gray-700"
+                    }`}
+                  >
+                    <span className="block text-sm font-semibold">Одноразовый</span>
+                    <span className="block text-xs mt-1">Один проход</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPassType("multiple")}
+                    className={`min-h-16 p-3 border rounded-md text-left transition-colors ${
+                      passType === "multiple"
+                        ? "border-blue-900 bg-blue-50 text-blue-950"
+                        : "border-gray-300 bg-white text-gray-700"
+                    }`}
+                  >
+                    <span className="block text-sm font-semibold">Многоразовый</span>
+                    <span className="block text-xs mt-1">До конца срока</span>
+                  </button>
+                </div>
               </div>
 
               <div>
@@ -199,6 +295,54 @@ export function GuestQR() {
                     {generatedPass.reason === 'interview' && 'Собеседование'}
                     {generatedPass.reason === 'maintenance' && 'Техническое обслуживание'}
                     {generatedPass.reason === 'other' && 'Другое'}
+                  </p>
+                </div>
+              </div>
+
+              {(generatedPass.phone || generatedPass.vehiclePlate) && (
+                <div className="grid grid-cols-2 gap-3">
+                  {generatedPass.phone && (
+                    <div className="flex items-start gap-2">
+                      <Phone className="w-5 h-5 text-gray-600 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-xs text-gray-500">Телефон</p>
+                        <p className="font-semibold text-gray-900">{generatedPass.phone}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {generatedPass.vehiclePlate && (
+                    <div className="flex items-start gap-2">
+                      <Car className="w-5 h-5 text-gray-600 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-xs text-gray-500">Авто</p>
+                        <p className="font-semibold text-gray-900">{generatedPass.vehiclePlate}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {generatedPass.comment && (
+                <div className="flex items-start gap-3">
+                  <FileText className="w-5 h-5 text-gray-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs text-gray-500">Комментарий</p>
+                    <p className="font-semibold text-gray-900">{generatedPass.comment}</p>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-start gap-3">
+                {generatedPass.passType === "multiple" ? (
+                  <Repeat2 className="w-5 h-5 text-gray-600 flex-shrink-0 mt-0.5" />
+                ) : (
+                  <TicketCheck className="w-5 h-5 text-gray-600 flex-shrink-0 mt-0.5" />
+                )}
+                <div>
+                  <p className="text-xs text-gray-500">Тип пропуска</p>
+                  <p className="font-semibold text-gray-900">
+                    {generatedPass.passType === "multiple" ? "Многоразовый" : "Одноразовый"}
                   </p>
                 </div>
               </div>

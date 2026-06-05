@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -12,7 +12,14 @@ export function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    api.me()
+      .then(() => navigate("/", { replace: true }))
+      .catch(() => setCheckingSession(false));
+  }, [navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,6 +35,14 @@ export function Login() {
       setLoading(false);
     }
   };
+
+  if (checkingSession) {
+    return (
+      <div className="min-h-screen bg-blue-950 text-white flex items-center justify-center">
+        <p className="text-sm">Проверка входа...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-950 via-blue-900 to-blue-800 flex items-center justify-center p-4">
@@ -84,6 +99,18 @@ export function Login() {
               <p className="text-sm text-red-600 text-center">{error}</p>
             )}
           </form>
+
+          <div className="mt-6 pt-5 border-t border-gray-200 text-center">
+            <p className="text-sm text-gray-600 mb-3">Ещё нет аккаунта?</p>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => navigate("/register")}
+              className="w-full py-5 border-blue-900 text-blue-900 hover:bg-blue-50"
+            >
+              Создать аккаунт
+            </Button>
+          </div>
 
           <div className="mt-6 text-center">
             <p className="text-xs text-gray-500">

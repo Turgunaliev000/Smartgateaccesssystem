@@ -16,6 +16,11 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/", include("backend.gates.urls")),
     re_path(r"^assets/(?P<path>.*)$", serve, {"document_root": settings.BASE_DIR / "dist" / "assets"}),
+    re_path(
+        r"^(?P<path>manifest\.webmanifest|sw\.js|pwa-icon\.svg|pwa-icon-192\.png|pwa-icon-512\.png|install-guide-phones\.png)$",
+        serve,
+        {"document_root": settings.BASE_DIR / "dist"},
+    ),
     path("", react_app),
-    re_path(r"^(?P<path>login|guest-qr|scanner|history|notifications|profile|admin-panel)/?$", react_app),
+    re_path(r"^(?P<path>login|register|guest-qr|scanner|history|notifications|profile|admin-panel)/?$", react_app),
 ]

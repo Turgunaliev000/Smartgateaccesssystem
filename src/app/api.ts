@@ -39,6 +39,8 @@ export type GateState = {
   openedUntil: string | null;
 };
 
+export type UserRole = "student" | "staff" | "security" | "admin";
+
 export type HistoryEntry = {
   id: number;
   type: "student" | "guest" | "staff" | "admin";
@@ -63,9 +65,14 @@ export type GuestPass = {
   id: number;
   code: string;
   name: string;
+  phone: string;
+  vehiclePlate: string;
+  comment: string;
   reason: string;
   validUntil: string;
   validUntilIso: string;
+  passType: "one_time" | "multiple";
+  usageCount: number;
   status: "active" | "used" | "expired";
 };
 
@@ -81,6 +88,18 @@ export const api = {
     request<{ user: AccessUser }>("/auth/login/", {
       method: "POST",
       body: JSON.stringify({ email, password }),
+    }),
+  register: (data: {
+    name: string;
+    email: string;
+    phone: string;
+    department: string;
+    password: string;
+    passwordConfirm: string;
+  }) =>
+    request<{ user: AccessUser }>("/auth/register/", {
+      method: "POST",
+      body: JSON.stringify(data),
     }),
   logout: () => request<{ ok: boolean }>("/auth/logout/", { method: "POST" }),
   me: () => request<{ user: AccessUser }>("/me/"),
@@ -98,10 +117,18 @@ export const api = {
       };
     }>("/dashboard/"),
   openGate: () => request<{ gate: GateState; user: AccessUser }>("/gate/open/", { method: "POST" }),
-  createGuestPass: (name: string, reason: string, validUntil: string) =>
+  createGuestPass: (data: {
+    name: string;
+    phone: string;
+    vehiclePlate: string;
+    comment: string;
+    reason: string;
+    validUntil: string;
+    passType: "one_time" | "multiple";
+  }) =>
     request<{ pass: GuestPass }>("/guest-passes/", {
       method: "POST",
-      body: JSON.stringify({ name, reason, validUntil }),
+      body: JSON.stringify(data),
     }),
   guestPasses: () => request<{ passes: GuestPass[]; stats: { today: number; week: number; month: number } }>("/guest-passes/"),
   scanGuestPass: (code: string) =>
@@ -121,10 +148,22 @@ export const api = {
   markAllNotificationsRead: () => request<{ ok: boolean }>("/notifications/read-all/", { method: "POST" }),
   deleteNotification: (id: number) => request<{ ok: boolean }>(`/notifications/${id}/`, { method: "DELETE" }),
   users: () => request<{ users: AccessUser[] }>("/users/"),
-  createUser: (name: string, type: "student" | "staff" | "security") =>
+  createUser: (data: {
+    name: string;
+    email: string;
+    password: string;
+    type: UserRole;
+    phone: string;
+    department: string;
+  }) =>
     request<{ user: AccessUser }>("/users/", {
       method: "POST",
-      body: JSON.stringify({ name, type }),
+      body: JSON.stringify(data),
     }),
   toggleUser: (id: number) => request<{ user: AccessUser }>(`/users/${id}/toggle/`, { method: "POST" }),
+  updateUserRole: (id: number, role: UserRole) =>
+    request<{ user: AccessUser }>(`/users/${id}/role/`, {
+      method: "POST",
+      body: JSON.stringify({ role }),
+    }),
 };

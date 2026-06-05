@@ -1,25 +1,90 @@
-import { Outlet, NavLink } from "react-router";
-import { Home, QrCode, History, Bell, User, Shield } from "lucide-react";
+import { Outlet, NavLink, useNavigate } from "react-router";
+import { Home, QrCode, History, Bell, User, Shield, FileScan, Settings, Download } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { useEffect, useState } from "react";
-import { api } from "../api";
+import { api, AccessUser } from "../api";
+import { toast } from "sonner";
+
+type InstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+};
 
 export function Layout() {
+  const navigate = useNavigate();
   const [unreadCount, setUnreadCount] = useState(0);
+  const [user, setUser] = useState<AccessUser | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
+  const [isInstalled, setIsInstalled] = useState(false);
 
   useEffect(() => {
-    api.notifications()
+    api.me()
+      .then((data) => {
+        setUser(data.user);
+        return api.notifications();
+      })
       .then((data) => setUnreadCount(data.notifications.filter((item) => !item.read).length))
-      .catch(() => undefined);
-  }, []);
+      .catch(() => navigate("/login", { replace: true }))
+      .finally(() => setAuthLoading(false));
 
+    const standalone = window.matchMedia("(display-mode: standalone)").matches;
+    setIsInstalled(standalone);
+
+    const handleInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as InstallPromptEvent);
+    };
+    const handleInstalled = () => {
+      setIsInstalled(true);
+      setInstallPrompt(null);
+      toast.success("Smart Gate установлен");
+    };
+
+    window.addEventListener("beforeinstallprompt", handleInstallPrompt);
+    window.addEventListener("appinstalled", handleInstalled);
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleInstallPrompt);
+      window.removeEventListener("appinstalled", handleInstalled);
+    };
+  }, [navigate]);
+
+  const handleInstall = async () => {
+    if (installPrompt) {
+      await installPrompt.prompt();
+      const choice = await installPrompt.userChoice;
+      if (choice.outcome === "accepted") {
+        setInstallPrompt(null);
+      }
+      return;
+    }
+
+    toast.info("На iPhone: нажмите «Поделиться», затем «На экран Домой». В Chrome откройте меню и выберите «Установить приложение».");
+  };
+
+  const role = user?.isAdmin ? "admin" : user?.type;
   const navItems = [
-    { path: "/", icon: Home, label: "Главная" },
-    { path: "/guest-qr", icon: QrCode, label: "QR" },
-    { path: "/history", icon: History, label: "Журнал" },
-    { path: "/notifications", icon: Bell, label: "Уведомления", badge: unreadCount },
-    { path: "/profile", icon: User, label: "Профиль" },
-  ];
+    { path: "/", icon: Home, label: "Главная", show: true },
+    { path: "/guest-qr", icon: QrCode, label: "QR", show: role === "admin" || role === "staff" },
+    { path: "/scanner", icon: FileScan, label: "Сканер", show: role === "admin" || role === "security" },
+    { path: "/history", icon: History, label: "Журнал", show: true },
+    { path: "/notifications", icon: Bell, label: "Уведомления", badge: unreadCount, show: true },
+    { path: "/admin-panel", icon: Settings, label: "Админ", show: role === "admin" },
+    { path: "/profile", icon: User, label: "Профиль", show: true },
+  ].filter((item) => item.show);
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-blue-950 text-white flex items-center justify-center">
+        <p className="text-sm">Проверка доступа...</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -33,6 +98,16 @@ export function Layout() {
               <p className="text-xs text-blue-200">Салымбеков Университет</p>
             </div>
           </div>
+          {!isInstalled && (
+            <button
+              type="button"
+              onClick={handleInstall}
+              title="Установить приложение"
+              className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-blue-900 transition-colors"
+            >
+              <Download className="w-5 h-5" />
+            </button>
+          )}
         </div>
       </header>
 
@@ -43,7 +118,10 @@ export function Layout() {
 
       {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg">
-        <div className="max-w-md mx-auto grid grid-cols-5 gap-1">
+        <div
+          className="max-w-md mx-auto grid gap-1"
+          style={{ gridTemplateColumns: `repeat(${navItems.length}, minmax(0, 1fr))` }}
+        >
           {navItems.map((item) => (
             <NavLink
               key={item.path}

@@ -1,7 +1,12 @@
 import json
+import re
+import secrets
 from datetime import datetime, time, timedelta
 
 from django.contrib.auth import logout
+from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
+from django.db import IntegrityError, transaction
 from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
@@ -18,13 +23,11 @@ def payload(request):
 def current_user(request):
     user_id = request.session.get("access_user_id")
     if user_id:
-        user = AccessUser.objects.filter(id=user_id).first()
+        user = AccessUser.objects.filter(id=user_id, is_active=True).first()
         if user:
             return user
-    user = AccessUser.objects.filter(is_admin=True, is_active=True).first()
-    if user:
-        request.session["access_user_id"] = user.id
-    return user
+        request.session.pop("access_user_id", None)
+    return None
 
 
 def require_user(request):
@@ -32,6 +35,20 @@ def require_user(request):
     if not user:
         return None, JsonResponse({"detail": "Не выполнен вход в систему"}, status=401)
     return user, None
+
+
+def role_of(user):
+    if user.is_admin:
+        return "admin"
+    return user.user_type
+
+
+def has_role(user, *roles):
+    return role_of(user) in roles
+
+
+def permission_denied():
+    return JsonResponse({"detail": "Недостаточно прав для этого действия"}, status=403)
 
 
 def gate_payload(gate):
@@ -60,7 +77,7 @@ def user_payload(user):
         "department": user.department,
         "identifier": user.identifier,
         "status": "active" if user.is_active else "blocked",
-        "isAdmin": user.is_admin,
+        "isAdmin": has_role(user, "admin"),
         "accessCount": user.access_count,
     }
 
@@ -113,9 +130,14 @@ def guest_payload(guest_pass):
         "id": guest_pass.id,
         "code": guest_pass.code,
         "name": guest_pass.guest_name,
+        "phone": guest_pass.guest_phone,
+        "vehiclePlate": guest_pass.vehicle_plate,
+        "comment": guest_pass.comment,
         "reason": guest_pass.reason,
         "validUntil": timezone.localtime(guest_pass.valid_until).strftime("%H:%M"),
         "validUntilIso": guest_pass.valid_until.isoformat(),
+        "passType": guest_pass.pass_type,
+        "usageCount": guest_pass.usage_count,
         "status": guest_pass.status,
     }
 
@@ -146,7 +168,63 @@ def login_view(request):
     if not user.check_password(data.get("password", "")):
         return JsonResponse({"detail": "Неверный пароль"}, status=401)
     request.session["access_user_id"] = user.id
+    request.session.set_expiry(60 * 60 * 24 * 30)
     return JsonResponse({"user": user_payload(user)})
+
+
+@csrf_exempt
+def register_view(request):
+    if request.method != "POST":
+        return JsonResponse({"detail": "Метод не поддерживается"}, status=405)
+
+    data = payload(request)
+    full_name = " ".join(data.get("name", "").strip().split())
+    email = data.get("email", "").strip().lower()
+    phone = data.get("phone", "").strip()
+    department = data.get("department", "").strip()
+    password = data.get("password", "")
+    password_confirm = data.get("passwordConfirm", "")
+
+    if len(full_name) < 3:
+        return JsonResponse({"detail": "Укажите имя и фамилию"}, status=400)
+    try:
+        validate_email(email)
+    except ValidationError:
+        return JsonResponse({"detail": "Введите корректный email"}, status=400)
+    if phone and not re.fullmatch(r"[+()\d\s-]{7,24}", phone):
+        return JsonResponse({"detail": "Введите корректный номер телефона"}, status=400)
+    if len(password) < 8:
+        return JsonResponse({"detail": "Пароль должен содержать минимум 8 символов"}, status=400)
+    if password != password_confirm:
+        return JsonResponse({"detail": "Пароли не совпадают"}, status=400)
+    if AccessUser.objects.filter(email__iexact=email).exists():
+        return JsonResponse({"detail": "Аккаунт с таким email уже существует"}, status=409)
+
+    try:
+        user = AccessUser(
+            full_name=full_name,
+            email=email,
+            phone=phone,
+            user_type=AccessUser.STUDENT,
+            department=department,
+            identifier=f"USR-{secrets.token_hex(4).upper()}",
+            is_active=True,
+            is_admin=False,
+        )
+        user.set_password(password)
+        user.save()
+    except IntegrityError:
+        return JsonResponse({"detail": "Не удалось создать аккаунт. Попробуйте ещё раз"}, status=409)
+
+    Notification.objects.create(
+        user=user,
+        notification_type="alert",
+        title="Добро пожаловать в Smart Gate",
+        message="Аккаунт создан. Ваша роль и доступ могут быть изменены администратором.",
+    )
+    request.session["access_user_id"] = user.id
+    request.session.set_expiry(60 * 60 * 24 * 30)
+    return JsonResponse({"user": user_payload(user)}, status=201)
 
 
 @csrf_exempt
@@ -227,11 +305,14 @@ def guest_passes_view(request):
     user, error = require_user(request)
     if error:
         return error
+    if not has_role(user, "admin", "staff"):
+        return permission_denied()
     if request.method == "GET":
-        passes = GuestPass.objects.filter(host=user).order_by("-created_at")[:20]
-        today = GuestPass.objects.filter(host=user, created_at__date=timezone.localdate()).count()
-        week = GuestPass.objects.filter(host=user, created_at__gte=timezone.now() - timedelta(days=7)).count()
-        month = GuestPass.objects.filter(host=user, created_at__month=timezone.localdate().month).count()
+        queryset = GuestPass.objects.all() if has_role(user, "admin") else GuestPass.objects.filter(host=user)
+        passes = queryset.order_by("-created_at")[:20]
+        today = queryset.filter(created_at__date=timezone.localdate()).count()
+        week = queryset.filter(created_at__gte=timezone.now() - timedelta(days=7)).count()
+        month = queryset.filter(created_at__month=timezone.localdate().month).count()
         return JsonResponse({"passes": [guest_payload(item) for item in passes], "stats": {"today": today, "week": week, "month": month}})
     if request.method != "POST":
         return JsonResponse({"detail": "Метод не поддерживается"}, status=405)
@@ -242,9 +323,13 @@ def guest_passes_view(request):
     valid_until = timezone.make_aware(datetime.combine(timezone.localdate(), time(hour, minute)))
     guest_pass = GuestPass.objects.create(
         guest_name=data.get("name", "").strip(),
+        guest_phone=data.get("phone", "").strip(),
+        vehicle_plate=data.get("vehiclePlate", "").strip().upper(),
+        comment=data.get("comment", "").strip(),
         reason=data.get("reason", "other"),
         host=user,
         valid_until=valid_until,
+        pass_type=data.get("passType") if data.get("passType") in [GuestPass.ONE_TIME, GuestPass.MULTIPLE] else GuestPass.ONE_TIME,
     )
     Notification.objects.create(
         user=user,
@@ -260,6 +345,8 @@ def scan_guest_pass_view(request):
     user, error = require_user(request)
     if error:
         return error
+    if not has_role(user, "admin", "security"):
+        return permission_denied()
     if request.method == "GET":
         passes = GuestPass.objects.select_related("host").order_by("-created_at")[:80]
         recent_logs = AccessLog.objects.filter(subject_type="guest").order_by("-created_at")[:10]
@@ -291,15 +378,25 @@ def scan_guest_pass_view(request):
         )
         return JsonResponse({"status": "denied", "detail": "Пропуск не найден"}, status=404)
 
-    if guest_pass.is_used:
+    if guest_pass.pass_type == GuestPass.ONE_TIME and guest_pass.is_used:
         return JsonResponse({"status": "used", "pass": guest_payload(guest_pass), "detail": "Пропуск уже использован"}, status=409)
 
     if guest_pass.is_expired:
         return JsonResponse({"status": "expired", "pass": guest_payload(guest_pass), "detail": "Срок действия пропуска истёк"}, status=409)
 
     now = timezone.now()
-    guest_pass.is_used = True
-    guest_pass.save(update_fields=["is_used"])
+    with transaction.atomic():
+        guest_pass = GuestPass.objects.select_for_update().select_related("host").get(id=guest_pass.id)
+        if guest_pass.pass_type == GuestPass.ONE_TIME and guest_pass.is_used:
+            return JsonResponse({"status": "used", "pass": guest_payload(guest_pass), "detail": "Пропуск уже использован"}, status=409)
+        if guest_pass.is_expired:
+            return JsonResponse({"status": "expired", "pass": guest_payload(guest_pass), "detail": "Срок действия пропуска истёк"}, status=409)
+        guest_pass.usage_count += 1
+        update_fields = ["usage_count"]
+        if guest_pass.pass_type == GuestPass.ONE_TIME:
+            guest_pass.is_used = True
+            update_fields.append("is_used")
+        guest_pass.save(update_fields=update_fields)
 
     gate.is_open = True
     gate.last_opened_at = now
@@ -318,7 +415,7 @@ def scan_guest_pass_view(request):
         user=guest_pass.host,
         notification_type="guest",
         title="Гость прошёл через КПП",
-        message=f"{guest_pass.guest_name} использовал гостевой QR-пропуск",
+        message=f"{guest_pass.guest_name} использовал гостевой QR-пропуск ({guest_pass.usage_count}-й проход)",
     )
     Notification.objects.create(
         user=user,
@@ -334,10 +431,14 @@ def access_logs_view(request):
     user, error = require_user(request)
     if error:
         return error
-    logs = AccessLog.objects.all()[:80]
-    today = AccessLog.objects.filter(created_at__date=timezone.localdate()).count()
-    week = AccessLog.objects.filter(created_at__gte=timezone.now() - timedelta(days=7)).count()
-    month = AccessLog.objects.filter(created_at__month=timezone.localdate().month).count()
+    if has_role(user, "admin", "security"):
+        queryset = AccessLog.objects.all()
+    else:
+        queryset = AccessLog.objects.filter(user=user)
+    logs = queryset[:80]
+    today = queryset.filter(created_at__date=timezone.localdate()).count()
+    week = queryset.filter(created_at__gte=timezone.now() - timedelta(days=7)).count()
+    month = queryset.filter(created_at__month=timezone.localdate().month).count()
     return JsonResponse({"logs": [log_payload(log) for log in logs], "stats": {"today": today, "week": week, "month": month}})
 
 
@@ -384,7 +485,7 @@ def users_view(request):
     user, error = require_user(request)
     if error:
         return error
-    if not user.is_admin:
+    if not has_role(user, "admin"):
         return JsonResponse({"detail": "Недостаточно прав"}, status=403)
     if request.method == "GET":
         users = AccessUser.objects.all().order_by("full_name")
@@ -392,14 +493,26 @@ def users_view(request):
     if request.method != "POST":
         return JsonResponse({"detail": "Метод не поддерживается"}, status=405)
     data = payload(request)
+    user_type = data.get("type", "student")
+    if user_type not in ["student", "staff", "security", "admin"]:
+        return JsonResponse({"detail": "Неверная должность пользователя"}, status=400)
+    email = data.get("email", "").strip().lower()
+    password = data.get("password", "").strip()
+    if not data.get("name", "").strip() or not email or len(password) < 6:
+        return JsonResponse({"detail": "Укажите имя, email и пароль минимум из 6 символов"}, status=400)
+    if AccessUser.objects.filter(email=email).exists():
+        return JsonResponse({"detail": "Пользователь с таким email уже существует"}, status=409)
     created = AccessUser.objects.create(
         full_name=data.get("name", "").strip(),
-        email=data.get("email", f"user-{timezone.now().timestamp()}@salymbekov.edu"),
-        user_type=data.get("type", "student"),
-        phone=data.get("phone", ""),
+        email=email,
+        user_type=user_type,
+        phone=data.get("phone", "").strip(),
         department=data.get("department", "Салымбеков Университет"),
         identifier=data.get("identifier", f"USR-{int(timezone.now().timestamp())}"),
+        is_admin=user_type == "admin",
     )
+    created.set_password(password)
+    created.save(update_fields=["password_hash"])
     Notification.objects.create(
         user=user,
         notification_type="alert",
@@ -414,7 +527,7 @@ def user_toggle_view(request, user_id):
     admin_user, error = require_user(request)
     if error:
         return error
-    if not admin_user.is_admin:
+    if not has_role(admin_user, "admin"):
         return JsonResponse({"detail": "Недостаточно прав"}, status=403)
     target = AccessUser.objects.get(id=user_id)
     target.is_active = not target.is_active
@@ -424,5 +537,39 @@ def user_toggle_view(request, user_id):
         notification_type="alert",
         title="Статус пользователя изменён",
         message=f"{target.full_name}: {'активен' if target.is_active else 'заблокирован'}",
+    )
+    return JsonResponse({"user": user_payload(target)})
+
+
+@csrf_exempt
+def user_role_view(request, user_id):
+    if request.method != "POST":
+        return JsonResponse({"detail": "Метод не поддерживается"}, status=405)
+    admin_user, error = require_user(request)
+    if error:
+        return error
+    if not has_role(admin_user, "admin"):
+        return permission_denied()
+
+    target = AccessUser.objects.filter(id=user_id).first()
+    if not target:
+        return JsonResponse({"detail": "Пользователь не найден"}, status=404)
+
+    role = payload(request).get("role", "")
+    valid_roles = {AccessUser.STUDENT, AccessUser.STAFF, AccessUser.SECURITY, AccessUser.ADMIN}
+    if role not in valid_roles:
+        return JsonResponse({"detail": "Неверная роль пользователя"}, status=400)
+    if target.id == admin_user.id and role != AccessUser.ADMIN:
+        return JsonResponse({"detail": "Нельзя снять роль администратора у самого себя"}, status=400)
+
+    target.user_type = role
+    target.is_admin = role == AccessUser.ADMIN
+    target.save(update_fields=["user_type", "is_admin"])
+
+    Notification.objects.create(
+        user=target,
+        notification_type="alert",
+        title="Роль аккаунта изменена",
+        message=f"Вам назначена роль «{target.get_user_type_display()}».",
     )
     return JsonResponse({"user": user_payload(target)})

@@ -5,6 +5,7 @@ from . import views
 
 urlpatterns = [
     path("auth/login/", views.login_view),
+    path("auth/register/", views.register_view),
     path("auth/logout/", views.logout_view),
     path("me/", views.me_view),
     path("dashboard/", views.dashboard_view),
@@ -18,4 +19,5 @@ urlpatterns = [
     path("notifications/<int:notification_id>/", views.notification_delete_view),
     path("users/", views.users_view),
     path("users/<int:user_id>/toggle/", views.user_toggle_view),
+    path("users/<int:user_id>/role/", views.user_role_view),
 ]

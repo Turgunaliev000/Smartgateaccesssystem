@@ -1,0 +1,9 @@
+.git
+.DS_Store
+.env
+.venv
+__pycache__
+*.pyc
+db.sqlite3
+dist
+node_modules

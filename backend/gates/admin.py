@@ -17,8 +17,8 @@ class GateAdmin(admin.ModelAdmin):
 
 @admin.register(GuestPass)
 class GuestPassAdmin(admin.ModelAdmin):
-    list_display = ("guest_name", "reason", "host", "valid_until", "is_used", "created_at")
-    search_fields = ("guest_name", "code", "host__full_name")
+    list_display = ("guest_name", "vehicle_plate", "guest_phone", "reason", "host", "valid_until", "is_used", "created_at")
+    search_fields = ("guest_name", "vehicle_plate", "guest_phone", "code", "host__full_name")
     list_filter = ("reason", "is_used")
 
 

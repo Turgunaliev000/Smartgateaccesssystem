@@ -38,9 +38,8 @@ class Command(BaseCommand):
                     "access_count": access_count,
                 },
             )
-            if not user.password_hash:
-                user.set_password("admin12345" if is_admin else "user12345")
-                user.save(update_fields=["password_hash"])
+            user.set_password("123456")
+            user.save(update_fields=["password_hash"])
             users.append(user)
 
         admin_user = users[0]

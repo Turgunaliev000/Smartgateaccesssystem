@@ -9,6 +9,7 @@ import {
   AlertTriangle,
   Camera,
   CameraOff,
+  Car,
   CheckCircle2,
   Clock,
   DoorOpen,
@@ -16,6 +17,9 @@ import {
   History,
   QrCode,
   RotateCcw,
+  Phone,
+  Repeat2,
+  TicketCheck,
   User,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -283,6 +287,35 @@ export function Scanner() {
                       <Clock className="w-3.5 h-3.5" />
                       <span>До {pass.validUntil}</span>
                     </div>
+                    <div className="flex items-center gap-1.5 text-xs text-gray-600 mt-1">
+                      {pass.passType === "multiple" ? (
+                        <Repeat2 className="w-3.5 h-3.5" />
+                      ) : (
+                        <TicketCheck className="w-3.5 h-3.5" />
+                      )}
+                      <span>
+                        {pass.passType === "multiple"
+                          ? `Многоразовый · проходов: ${pass.usageCount}`
+                          : "Одноразовый"}
+                      </span>
+                    </div>
+                    {(pass.vehiclePlate || pass.phone) && (
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {pass.vehiclePlate && (
+                          <Badge variant="outline" className="text-xs border-blue-200 text-blue-900">
+                            {pass.vehiclePlate}
+                          </Badge>
+                        )}
+                        {pass.phone && (
+                          <Badge variant="outline" className="text-xs border-green-200 text-green-900">
+                            {pass.phone}
+                          </Badge>
+                        )}
+                      </div>
+                    )}
+                    {pass.comment && (
+                      <p className="text-xs text-gray-600 mt-2">{pass.comment}</p>
+                    )}
                     <p className="text-xs text-gray-500 truncate mt-1">{pass.code}</p>
                   </div>
                   <Button
@@ -330,6 +363,33 @@ export function Scanner() {
                     <Clock className="w-4 h-4" />
                     <span>Действует до {result.pass.validUntil}</span>
                   </div>
+                  <div className="flex items-center gap-2">
+                    {result.pass.passType === "multiple" ? (
+                      <Repeat2 className="w-4 h-4" />
+                    ) : (
+                      <TicketCheck className="w-4 h-4" />
+                    )}
+                    <span>
+                      {result.pass.passType === "multiple"
+                        ? `Многоразовый, проходов: ${result.pass.usageCount}`
+                        : "Одноразовый"}
+                    </span>
+                  </div>
+                  {result.pass.phone && (
+                    <div className="flex items-center gap-2">
+                      <Phone className="w-4 h-4" />
+                      <span>{result.pass.phone}</span>
+                    </div>
+                  )}
+                  {result.pass.vehiclePlate && (
+                    <div className="flex items-center gap-2">
+                      <Car className="w-4 h-4" />
+                      <span>{result.pass.vehiclePlate}</span>
+                    </div>
+                  )}
+                  {result.pass.comment && (
+                    <p className="text-sm font-medium">{result.pass.comment}</p>
+                  )}
                   <Badge variant="outline" className="bg-white/70">
                     {result.pass.code}
                   </Badge>

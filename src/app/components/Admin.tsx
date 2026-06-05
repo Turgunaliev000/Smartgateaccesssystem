@@ -21,18 +21,27 @@ import {
 } from "lucide-react";
 import { motion } from "motion/react";
 import { toast } from "sonner";
-import { api, AccessUser } from "../api";
+import { api, AccessUser, UserRole } from "../api";
 
 export function Admin() {
   const [users, setUsers] = useState<AccessUser[]>([]);
+  const [currentUser, setCurrentUser] = useState<AccessUser | null>(null);
+  const [updatingRoleId, setUpdatingRoleId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
   const [newUserName, setNewUserName] = useState("");
-  const [newUserType, setNewUserType] = useState<"student" | "staff" | "security">("student");
+  const [newUserEmail, setNewUserEmail] = useState("");
+  const [newUserPassword, setNewUserPassword] = useState("");
+  const [newUserPhone, setNewUserPhone] = useState("");
+  const [newUserDepartment, setNewUserDepartment] = useState("Салымбеков Университет");
+  const [newUserType, setNewUserType] = useState<UserRole>("student");
 
   useEffect(() => {
-    api.users()
-      .then((data) => setUsers(data.users))
+    Promise.all([api.users(), api.me()])
+      .then(([usersData, meData]) => {
+        setUsers(usersData.users);
+        setCurrentUser(meData.user);
+      })
       .catch((err) => toast.error(err instanceof Error ? err.message : "Не удалось загрузить пользователей"));
   }, []);
 
@@ -43,6 +52,13 @@ export function Admin() {
   const activeUsers = users.filter(u => u.status === "active").length;
   const blockedUsers = users.filter(u => u.status === "blocked").length;
   const totalAccess = users.reduce((sum, u) => sum + u.accessCount, 0);
+
+  const roleLabel = (type: string, isAdmin = false) => {
+    if (isAdmin || type === "admin") return "Администратор";
+    if (type === "staff") return "Преподаватель";
+    if (type === "security") return "Охрана";
+    return "Студент";
+  };
 
   const handleToggleStatus = async (userId: number) => {
     const user = users.find(u => u.id === userId);
@@ -61,13 +77,45 @@ export function Admin() {
     }
   };
 
+  const handleRoleChange = async (userId: number, role: UserRole) => {
+    const existingUser = users.find((item) => item.id === userId);
+    if (!existingUser || (existingUser.isAdmin ? "admin" : existingUser.type) === role) return;
+
+    setUpdatingRoleId(userId);
+    try {
+      const data = await api.updateUserRole(userId, role);
+      setUsers((current) =>
+        current.map((item) => (item.id === userId ? data.user : item)),
+      );
+      toast.success(
+        `${data.user.name}: назначена роль «${roleLabel(data.user.type, data.user.isAdmin)}»`,
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Не удалось изменить роль");
+    } finally {
+      setUpdatingRoleId(null);
+    }
+  };
+
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const data = await api.createUser(newUserName, newUserType);
+      const data = await api.createUser({
+        name: newUserName,
+        email: newUserEmail,
+        password: newUserPassword,
+        phone: newUserPhone,
+        department: newUserDepartment,
+        type: newUserType,
+      });
       setUsers(prev => [...prev, data.user]);
       toast.success(`${newUserName} добавлен в систему`);
       setNewUserName("");
+      setNewUserEmail("");
+      setNewUserPassword("");
+      setNewUserPhone("");
+      setNewUserDepartment("Салымбеков Университет");
+      setNewUserType("student");
       setShowAddForm(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Не удалось добавить пользователя");
@@ -179,17 +227,69 @@ export function Admin() {
               </div>
 
               <div>
-                <Label htmlFor="userType">Тип пользователя</Label>
+                <Label htmlFor="userEmail">Email для входа</Label>
+                <Input
+                  id="userEmail"
+                  type="email"
+                  placeholder="user@salymbekov.edu"
+                  value={newUserEmail}
+                  onChange={(e) => setNewUserEmail(e.target.value)}
+                  required
+                  className="mt-1.5"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="userPassword">Пароль</Label>
+                <Input
+                  id="userPassword"
+                  type="password"
+                  placeholder="Минимум 6 символов"
+                  value={newUserPassword}
+                  onChange={(e) => setNewUserPassword(e.target.value)}
+                  required
+                  minLength={6}
+                  className="mt-1.5"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="userType">Должность и привилегии</Label>
                 <select
                   id="userType"
                   value={newUserType}
-                  onChange={(e) => setNewUserType(e.target.value as "student" | "staff" | "security")}
+                  onChange={(e) => setNewUserType(e.target.value as UserRole)}
                   className="w-full mt-1.5 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="student">Студент</option>
-                  <option value="staff">Преподаватель</option>
-                  <option value="security">Охрана</option>
+                  <option value="student">Студент — личный доступ</option>
+                  <option value="staff">Преподаватель — гостевые QR</option>
+                  <option value="security">Охрана — сканер и журнал</option>
+                  <option value="admin">Администратор — полный доступ</option>
                 </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="userPhone">Телефон</Label>
+                  <Input
+                    id="userPhone"
+                    type="tel"
+                    placeholder="+996"
+                    value={newUserPhone}
+                    onChange={(e) => setNewUserPhone(e.target.value)}
+                    className="mt-1.5"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="userDepartment">Отдел</Label>
+                  <Input
+                    id="userDepartment"
+                    type="text"
+                    value={newUserDepartment}
+                    onChange={(e) => setNewUserDepartment(e.target.value)}
+                    className="mt-1.5"
+                  />
+                </div>
               </div>
 
               <Button type="submit" className="w-full bg-green-600 hover:bg-green-700">
@@ -231,7 +331,7 @@ export function Admin() {
             transition={{ delay: index * 0.05 }}
           >
             <Card className={`p-4 ${user.status === "blocked" ? "bg-red-50 border-red-200" : ""}`}>
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <h4 className="font-semibold text-gray-900 truncate">{user.name}</h4>
@@ -244,7 +344,7 @@ export function Admin() {
                   
                   <div className="flex items-center gap-3 text-sm text-gray-600">
                     <Badge variant="outline" className="text-xs">
-                      {user.type === "student" ? "Студент" : user.type === "staff" ? "Преподаватель" : user.type === "security" ? "Охрана" : "Администратор"}
+                      {roleLabel(user.type, user.isAdmin)}
                     </Badge>
                     <span className="text-xs">
                       {user.accessCount} {user.accessCount === 1 ? "въезд" : "въездов"}
@@ -270,6 +370,29 @@ export function Admin() {
                     </>
                   )}
                 </Button>
+              </div>
+
+              <div className="mt-4 pt-3 border-t border-gray-200">
+                <Label htmlFor={`role-${user.id}`} className="text-xs text-gray-600">
+                  Роль и права доступа
+                </Label>
+                <select
+                  id={`role-${user.id}`}
+                  value={user.isAdmin ? "admin" : user.type}
+                  onChange={(event) => handleRoleChange(user.id, event.target.value as UserRole)}
+                  disabled={updatingRoleId === user.id || currentUser?.id === user.id}
+                  className="w-full h-10 mt-1.5 px-3 border border-gray-300 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
+                >
+                  <option value="student">Студент — личный доступ</option>
+                  <option value="staff">Преподаватель — гостевые QR</option>
+                  <option value="security">Охрана — сканер и журнал</option>
+                  <option value="admin">Администратор — полный доступ</option>
+                </select>
+                {currentUser?.id === user.id && (
+                  <p className="text-xs text-gray-500 mt-1.5">
+                    Свою роль администратора изменить нельзя
+                  </p>
+                )}
               </div>
             </Card>
           </motion.div>

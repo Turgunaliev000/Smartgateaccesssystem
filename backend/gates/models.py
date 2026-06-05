@@ -53,6 +53,13 @@ class Gate(models.Model):
 
 
 class GuestPass(models.Model):
+    ONE_TIME = "one_time"
+    MULTIPLE = "multiple"
+    PASS_TYPES = [
+        (ONE_TIME, "Одноразовый"),
+        (MULTIPLE, "Многоразовый"),
+    ]
+
     REASONS = [
         ("meeting", "Встреча с сотрудником"),
         ("delivery", "Доставка"),
@@ -64,9 +71,14 @@ class GuestPass(models.Model):
 
     code = models.CharField(max_length=80, unique=True, default=secrets.token_urlsafe)
     guest_name = models.CharField(max_length=120)
+    guest_phone = models.CharField(max_length=40, blank=True)
+    vehicle_plate = models.CharField(max_length=30, blank=True)
+    comment = models.TextField(blank=True)
     reason = models.CharField(max_length=30, choices=REASONS)
     host = models.ForeignKey(AccessUser, on_delete=models.CASCADE, related_name="guest_passes")
     valid_until = models.DateTimeField()
+    pass_type = models.CharField(max_length=20, choices=PASS_TYPES, default=ONE_TIME)
+    usage_count = models.PositiveIntegerField(default=0)
     is_used = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -76,7 +88,7 @@ class GuestPass(models.Model):
 
     @property
     def status(self):
-        if self.is_used:
+        if self.pass_type == self.ONE_TIME and self.is_used:
             return "used"
         if self.is_expired:
             return "expired"
