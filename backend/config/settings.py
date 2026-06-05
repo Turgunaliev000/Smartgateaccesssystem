@@ -10,6 +10,7 @@ SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "smart-gate-dev-secret-key")
 DEBUG = os.environ.get("DJANGO_DEBUG", "true").lower() == "true"
 
 koyeb_domain = os.environ.get("KOYEB_PUBLIC_DOMAIN", "").strip()
+render_domain = os.environ.get("RENDER_EXTERNAL_HOSTNAME", "").strip()
 configured_hosts = [
     host.strip()
     for host in os.environ.get("DJANGO_ALLOWED_HOSTS", "").split(",")
@@ -18,6 +19,8 @@ configured_hosts = [
 ALLOWED_HOSTS = configured_hosts or ["*"]
 if koyeb_domain and koyeb_domain not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(koyeb_domain)
+if render_domain and render_domain not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(render_domain)
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -89,6 +92,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 CSRF_TRUSTED_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
 if koyeb_domain:
     CSRF_TRUSTED_ORIGINS.append(f"https://{koyeb_domain}")
+if render_domain:
+    CSRF_TRUSTED_ORIGINS.append(f"https://{render_domain}")
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SESSION_COOKIE_SECURE = not DEBUG
