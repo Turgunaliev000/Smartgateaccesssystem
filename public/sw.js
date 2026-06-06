@@ -1,9 +1,8 @@
-const CACHE_NAME = "smart-gate-v10";
+const CACHE_NAME = "smart-gate-v12";
 const APP_SHELL = [
   "/",
   "/login",
   "/manifest.webmanifest",
-  "/pwa-icon.svg",
   "/pwa-icon-192.png",
   "/pwa-icon-512.png",
   "/install-guide-phones.png"
