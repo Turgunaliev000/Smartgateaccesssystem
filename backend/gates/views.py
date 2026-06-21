@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 import secrets
 from datetime import datetime, time, timedelta
@@ -15,6 +16,9 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 
 from .models import AccessLog, AccessUser, Gate, GuestPass, Notification, PasswordResetCode
+
+
+logger = logging.getLogger(__name__)
 
 
 def payload(request):
@@ -276,6 +280,7 @@ def request_password_reset_view(request):
                 fail_silently=False,
             )
         except Exception:
+            logger.exception("Password reset email delivery failed for user_id=%s", user.id)
             reset_code.delete()
             return JsonResponse(
                 {"detail": "Не удалось отправить письмо. Попробуйте позже"},
