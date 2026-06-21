@@ -122,3 +122,8 @@ EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "true").lower() == "true"
 EMAIL_USE_SSL = os.environ.get("EMAIL_USE_SSL", "false").lower() == "true"
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER or "Smart Gate <noreply@smartgate.local>")
 EMAIL_TIMEOUT = 10
+
+# Free Render services block SMTP ports. Brevo sends transactional email over HTTPS.
+BREVO_API_KEY = os.environ.get("BREVO_API_KEY", "").strip()
+BREVO_SENDER_EMAIL = os.environ.get("BREVO_SENDER_EMAIL", EMAIL_HOST_USER).strip()
+BREVO_SENDER_NAME = os.environ.get("BREVO_SENDER_NAME", "Smart Gate").strip()

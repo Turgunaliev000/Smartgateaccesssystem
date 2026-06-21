@@ -2,6 +2,7 @@ import json
 import logging
 import re
 import secrets
+import urllib.request
 from datetime import datetime, time, timedelta
 
 from django.contrib.auth import logout
@@ -19,6 +20,48 @@ from .models import AccessLog, AccessUser, Gate, GuestPass, Notification, Passwo
 
 
 logger = logging.getLogger(__name__)
+
+
+def send_password_reset_email(user, raw_code):
+    message = (
+        f"Здравствуйте, {user.full_name}.\n\n"
+        f"Ваш код восстановления пароля: {raw_code}\n"
+        "Код действует 10 минут. Никому его не сообщайте.\n\n"
+        "Если вы не запрашивали смену пароля, проигнорируйте это письмо."
+    )
+
+    if settings.BREVO_API_KEY:
+        request_data = json.dumps(
+            {
+                "sender": {
+                    "name": settings.BREVO_SENDER_NAME,
+                    "email": settings.BREVO_SENDER_EMAIL,
+                },
+                "to": [{"name": user.full_name, "email": user.email}],
+                "subject": "Код восстановления Smart Gate",
+                "textContent": message,
+            }
+        ).encode("utf-8")
+        email_request = urllib.request.Request(
+            "https://api.brevo.com/v3/smtp/email",
+            data=request_data,
+            headers={
+                "accept": "application/json",
+                "api-key": settings.BREVO_API_KEY,
+                "content-type": "application/json",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(email_request, timeout=settings.EMAIL_TIMEOUT):
+            return
+
+    send_mail(
+        "Код восстановления Smart Gate",
+        message,
+        settings.DEFAULT_FROM_EMAIL,
+        [user.email],
+        fail_silently=False,
+    )
 
 
 def payload(request):
@@ -267,18 +310,7 @@ def request_password_reset_view(request):
         reset_code.save()
 
         try:
-            send_mail(
-                "Код восстановления Smart Gate",
-                (
-                    f"Здравствуйте, {user.full_name}.\n\n"
-                    f"Ваш код восстановления пароля: {raw_code}\n"
-                    "Код действует 10 минут. Никому его не сообщайте.\n\n"
-                    "Если вы не запрашивали смену пароля, проигнорируйте это письмо."
-                ),
-                settings.DEFAULT_FROM_EMAIL,
-                [user.email],
-                fail_silently=False,
-            )
+            send_password_reset_email(user, raw_code)
         except Exception:
             logger.exception("Password reset email delivery failed for user_id=%s", user.id)
             reset_code.delete()

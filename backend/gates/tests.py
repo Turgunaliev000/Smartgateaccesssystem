@@ -1,5 +1,6 @@
 import json
 import re
+from unittest.mock import patch
 
 from django.core import mail
 from django.test import TestCase, override_settings
@@ -7,7 +8,10 @@ from django.test import TestCase, override_settings
 from .models import AccessUser, PasswordResetCode
 
 
-@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+@override_settings(
+    EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+    BREVO_API_KEY="",
+)
 class PasswordResetTests(TestCase):
     def setUp(self):
         self.user = AccessUser.objects.create(
@@ -75,3 +79,20 @@ class PasswordResetTests(TestCase):
         response = self.post_json("/api/auth/password-reset/request/", {"email": "missing@example.com"})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(mail.outbox), 0)
+
+    @override_settings(
+        BREVO_API_KEY="test-api-key",
+        BREVO_SENDER_EMAIL="verified@example.com",
+        BREVO_SENDER_NAME="Smart Gate",
+    )
+    @patch("backend.gates.views.urllib.request.urlopen")
+    def test_brevo_api_is_used_when_configured(self, urlopen):
+        response = self.post_json("/api/auth/password-reset/request/", {"email": self.user.email})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(mail.outbox), 0)
+        email_request = urlopen.call_args.args[0]
+        request_data = json.loads(email_request.data.decode("utf-8"))
+        self.assertEqual(email_request.full_url, "https://api.brevo.com/v3/smtp/email")
+        self.assertEqual(request_data["sender"]["email"], "verified@example.com")
+        self.assertEqual(request_data["to"][0]["email"], self.user.email)

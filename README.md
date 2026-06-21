@@ -76,7 +76,13 @@ Smart Gate работает как PWA:
 - `DJANGO_ALLOWED_HOSTS={{ KOYEB_PUBLIC_DOMAIN }}` — домен Koyeb.
 - `SEED_DEMO=true` — необязательно; создаёт демонстрационные записи при запуске.
 
-Для отправки кодов восстановления добавьте в Render или Koyeb:
+Для отправки кодов восстановления на бесплатном Render используйте Brevo HTTPS API:
+
+- `BREVO_API_KEY` — API-ключ Brevo.
+- `BREVO_SENDER_EMAIL` — подтверждённый в Brevo email отправителя.
+- `BREVO_SENDER_NAME=Smart Gate` — имя отправителя.
+
+Для локального запуска или хостинга с доступным SMTP можно использовать:
 
 - `EMAIL_HOST=smtp.gmail.com`
 - `EMAIL_PORT=587`
