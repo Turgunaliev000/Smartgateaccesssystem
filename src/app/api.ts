@@ -101,6 +101,21 @@ export const api = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+  requestPasswordReset: (email: string) =>
+    request<{ detail: string }>("/auth/password-reset/request/", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
+  confirmPasswordReset: (data: {
+    email: string;
+    code: string;
+    password: string;
+    passwordConfirm: string;
+  }) =>
+    request<{ detail: string }>("/auth/password-reset/confirm/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
   logout: () => request<{ ok: boolean }>("/auth/logout/", { method: "POST" }),
   me: () => request<{ user: AccessUser }>("/me/"),
   dashboard: () =>

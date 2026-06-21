@@ -22,5 +22,5 @@ urlpatterns = [
         {"document_root": settings.BASE_DIR / "dist"},
     ),
     path("", react_app),
-    re_path(r"^(?P<path>login|register|guest-qr|scanner|history|notifications|profile|admin-panel)/?$", react_app),
+    re_path(r"^(?P<path>login|register|forgot-password|guest-qr|scanner|history|notifications|profile|admin-panel)/?$", react_app),
 ]

@@ -9,6 +9,7 @@ import { Notifications } from "./components/Notifications";
 import { Profile } from "./components/Profile";
 import { Admin } from "./components/Admin";
 import { Scanner } from "./components/Scanner";
+import { ForgotPassword } from "./components/ForgotPassword";
 
 export const router = createBrowserRouter([
   {
@@ -18,6 +19,10 @@ export const router = createBrowserRouter([
   {
     path: "/register",
     Component: Register,
+  },
+  {
+    path: "/forgot-password",
+    Component: ForgotPassword,
   },
   {
     path: "/",

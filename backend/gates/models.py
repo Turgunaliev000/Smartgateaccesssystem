@@ -41,6 +41,28 @@ class AccessUser(models.Model):
         return check_password(raw_password, self.password_hash)
 
 
+class PasswordResetCode(models.Model):
+    user = models.ForeignKey(AccessUser, on_delete=models.CASCADE, related_name="password_reset_codes")
+    code_hash = models.CharField(max_length=128)
+    expires_at = models.DateTimeField()
+    attempts = models.PositiveSmallIntegerField(default=0)
+    used_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    @property
+    def is_valid(self):
+        return self.used_at is None and self.expires_at > timezone.now() and self.attempts < 5
+
+    def set_code(self, raw_code):
+        self.code_hash = make_password(raw_code)
+
+    def check_code(self, raw_code):
+        return check_password(raw_code, self.code_hash)
+
+
 class Gate(models.Model):
     name = models.CharField(max_length=80)
     location = models.CharField(max_length=160)

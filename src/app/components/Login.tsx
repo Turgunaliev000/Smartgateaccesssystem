@@ -75,7 +75,16 @@ export function Login() {
             </div>
 
             <div>
-              <Label htmlFor="password" className="text-gray-700">Пароль</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password" className="text-gray-700">Пароль</Label>
+                <button
+                  type="button"
+                  onClick={() => navigate("/forgot-password")}
+                  className="text-sm font-medium text-blue-800 hover:text-blue-950"
+                >
+                  Забыли пароль?
+                </button>
+              </div>
               <Input
                 id="password"
                 type="password"

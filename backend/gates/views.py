@@ -4,14 +4,17 @@ import secrets
 from datetime import datetime, time, timedelta
 
 from django.contrib.auth import logout
+from django.contrib.sessions.models import Session
 from django.core.exceptions import ValidationError
+from django.core.mail import send_mail
 from django.core.validators import validate_email
+from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 
-from .models import AccessLog, AccessUser, Gate, GuestPass, Notification
+from .models import AccessLog, AccessUser, Gate, GuestPass, Notification, PasswordResetCode
 
 
 def payload(request):
@@ -225,6 +228,115 @@ def register_view(request):
     request.session["access_user_id"] = user.id
     request.session.set_expiry(60 * 60 * 24 * 30)
     return JsonResponse({"user": user_payload(user)}, status=201)
+
+
+@csrf_exempt
+def request_password_reset_view(request):
+    if request.method != "POST":
+        return JsonResponse({"detail": "Метод не поддерживается"}, status=405)
+
+    email = payload(request).get("email", "").strip().lower()
+    try:
+        validate_email(email)
+    except ValidationError:
+        return JsonResponse({"detail": "Введите корректный email"}, status=400)
+
+    user = AccessUser.objects.filter(email__iexact=email, is_active=True).first()
+    if user:
+        recent_code = PasswordResetCode.objects.filter(
+            user=user,
+            created_at__gte=timezone.now() - timedelta(seconds=60),
+        ).first()
+        if recent_code:
+            return JsonResponse(
+                {"detail": "Новый код можно запросить через минуту"},
+                status=429,
+            )
+
+        PasswordResetCode.objects.filter(user=user, used_at__isnull=True).update(used_at=timezone.now())
+        raw_code = f"{secrets.randbelow(1_000_000):06d}"
+        reset_code = PasswordResetCode(
+            user=user,
+            expires_at=timezone.now() + timedelta(minutes=10),
+        )
+        reset_code.set_code(raw_code)
+        reset_code.save()
+
+        try:
+            send_mail(
+                "Код восстановления Smart Gate",
+                (
+                    f"Здравствуйте, {user.full_name}.\n\n"
+                    f"Ваш код восстановления пароля: {raw_code}\n"
+                    "Код действует 10 минут. Никому его не сообщайте.\n\n"
+                    "Если вы не запрашивали смену пароля, проигнорируйте это письмо."
+                ),
+                settings.DEFAULT_FROM_EMAIL,
+                [user.email],
+                fail_silently=False,
+            )
+        except Exception:
+            reset_code.delete()
+            return JsonResponse(
+                {"detail": "Не удалось отправить письмо. Попробуйте позже"},
+                status=503,
+            )
+
+    return JsonResponse({"detail": "Если аккаунт существует, код отправлен на указанный email"})
+
+
+def close_user_sessions(user_id):
+    for session in Session.objects.filter(expire_date__gte=timezone.now()).iterator():
+        try:
+            if session.get_decoded().get("access_user_id") == user_id:
+                session.delete()
+        except Exception:
+            continue
+
+
+@csrf_exempt
+def confirm_password_reset_view(request):
+    if request.method != "POST":
+        return JsonResponse({"detail": "Метод не поддерживается"}, status=405)
+
+    data = payload(request)
+    email = data.get("email", "").strip().lower()
+    code = re.sub(r"\D", "", data.get("code", ""))
+    password = data.get("password", "")
+    password_confirm = data.get("passwordConfirm", "")
+
+    if len(code) != 6:
+        return JsonResponse({"detail": "Введите шестизначный код"}, status=400)
+    if len(password) < 8:
+        return JsonResponse({"detail": "Пароль должен содержать минимум 8 символов"}, status=400)
+    if password != password_confirm:
+        return JsonResponse({"detail": "Пароли не совпадают"}, status=400)
+
+    user = AccessUser.objects.filter(email__iexact=email, is_active=True).first()
+    reset_code = PasswordResetCode.objects.filter(user=user, used_at__isnull=True).first() if user else None
+    if not reset_code or not reset_code.is_valid:
+        return JsonResponse({"detail": "Код недействителен или срок его действия истёк"}, status=400)
+
+    if not reset_code.check_code(code):
+        reset_code.attempts += 1
+        reset_code.save(update_fields=["attempts"])
+        return JsonResponse({"detail": "Неверный код"}, status=400)
+
+    with transaction.atomic():
+        user.set_password(password)
+        user.save(update_fields=["password_hash"])
+        reset_code.used_at = timezone.now()
+        reset_code.save(update_fields=["used_at"])
+        PasswordResetCode.objects.filter(user=user, used_at__isnull=True).update(used_at=timezone.now())
+
+    close_user_sessions(user.id)
+    Notification.objects.create(
+        user=user,
+        notification_type="alert",
+        title="Пароль изменён",
+        message="Пароль аккаунта был восстановлен с помощью кода из email.",
+    )
+    return JsonResponse({"detail": "Пароль успешно изменён"})
 
 
 @csrf_exempt
