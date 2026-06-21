@@ -23,6 +23,7 @@ import {
   User,
 } from "lucide-react";
 import { toast } from "sonner";
+import type { IScannerControls } from "@zxing/browser";
 
 function statusText(result: ScanResult) {
   if (result.status === "allowed") return "Доступ разрешён";
@@ -48,7 +49,7 @@ export function Scanner() {
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState("");
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+  const scannerControlsRef = useRef<IScannerControls | null>(null);
   const scanningRef = useRef(false);
 
   const activePasses = useMemo(
@@ -104,8 +105,8 @@ export function Scanner() {
   };
 
   const stopCamera = () => {
-    streamRef.current?.getTracks().forEach((track) => track.stop());
-    streamRef.current = null;
+    scannerControlsRef.current?.stop();
+    scannerControlsRef.current = null;
     scanningRef.current = false;
     setCameraActive(false);
   };
@@ -114,49 +115,56 @@ export function Scanner() {
     setCameraError("");
     setResult(null);
 
-    if (!("BarcodeDetector" in window)) {
-      setCameraError("Этот браузер не поддерживает сканирование QR через камеру. Используйте ручной ввод кода.");
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+      setCameraError("Камера доступна только через HTTPS. Откройте защищённую ссылку приложения или используйте ручной ввод.");
       return;
     }
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" },
-        audio: false,
-      });
-      streamRef.current = stream;
       setCameraActive(true);
-      await new Promise((resolve) => requestAnimationFrame(resolve));
+      await new Promise((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(resolve))
+      );
 
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
+      if (!videoRef.current) {
+        throw new Error("Предпросмотр камеры не готов");
       }
 
       scanningRef.current = true;
-      const detector = new (window as any).BarcodeDetector({ formats: ["qr_code"] });
+      const { BrowserQRCodeReader } = await import("@zxing/browser");
+      const reader = new BrowserQRCodeReader();
+      const controls = await reader.decodeFromConstraints(
+        {
+          video: {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+          audio: false,
+        },
+        videoRef.current,
+        (scanResult, _error, activeControls) => {
+          if (!scanResult || !scanningRef.current) return;
 
-      const scanFrame = async () => {
-        if (!scanningRef.current || !videoRef.current) return;
-
-        try {
-          const codes = await detector.detect(videoRef.current);
-          const value = codes?.[0]?.rawValue;
-          if (value) {
-            stopCamera();
-            await runScan(value);
-            return;
-          }
-        } catch {
-          setCameraError("Не удалось распознать QR. Попробуйте приблизить код или используйте ручной ввод.");
+          scanningRef.current = false;
+          activeControls.stop();
+          scannerControlsRef.current = null;
+          setCameraActive(false);
+          void runScan(scanResult.getText());
         }
-
-        requestAnimationFrame(scanFrame);
-      };
-
-      requestAnimationFrame(scanFrame);
-    } catch {
-      setCameraError("Нет доступа к камере. Разрешите доступ в браузере или вставьте код вручную.");
+      );
+      if (!scanningRef.current) {
+        controls.stop();
+        return;
+      }
+      scannerControlsRef.current = controls;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      setCameraError(
+        message.includes("Permission") || message.includes("NotAllowed")
+          ? "Доступ к камере запрещён. Разрешите камеру в настройках браузера и попробуйте снова."
+          : "Не удалось запустить камеру. Проверьте разрешение браузера или вставьте код вручную."
+      );
       stopCamera();
     }
   };
